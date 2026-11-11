@@ -1,0 +1,11 @@
+write-kubeconfig-mode: "0600"
+node-name: courtside-vps
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+tls-san:
+  - "127.0.0.1"
+  - "10.89.0.1"
+disable:
+  - traefik
+  - servicelb
+secrets-encryption: true

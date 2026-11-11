@@ -1,0 +1,26 @@
+[Unit]
+Description=CourtSide PostgreSQL (dev, test, demo)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Network=courtside-db.network
+IP=10.89.0.2
+Image=docker.io/library/postgres@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994
+ContainerName=courtside-postgres
+PublishPort=127.0.0.1:5432:5432
+Volume=courtside-postgres-data:/var/lib/postgresql/data
+Volume=/etc/courtside/postgres/admin-password:/run/secrets/postgres-admin:ro
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/postgres-admin
+Environment=POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+Environment=TZ=UTC
+PodmanArgs=--memory=2g --cpus=2 --shm-size=256m
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target
