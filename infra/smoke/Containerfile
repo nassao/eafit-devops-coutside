@@ -1,0 +1,4 @@
+FROM docker.io/library/alpine@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+RUN adduser -D -u 10001 smoke && printf 'CourtSide infrastructure smoke test\n' > /smoke && chown smoke:smoke /smoke
+USER 10001:10001
+CMD ["sh", "-ec", "cat /smoke; exec sleep 3600"]

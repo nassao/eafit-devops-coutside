@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: courtside-infra-smoke
+  namespace: courtside-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: courtside-infra-smoke
+  template:
+    metadata:
+      labels:
+        app: courtside-infra-smoke
+    spec:
+      serviceAccountName: courtside-app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: smoke
+          image: courtside-infra-image-placeholder
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          readinessProbe:
+            exec:
+              command: [cat, /smoke]
+            initialDelaySeconds: 1
+            periodSeconds: 2

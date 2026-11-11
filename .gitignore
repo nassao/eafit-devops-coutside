@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+*.token
+*kubeconfig*
+.DS_Store
+.venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+build.env

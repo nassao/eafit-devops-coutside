@@ -1,0 +1,76 @@
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
+    - when: never
+
+stages: [verify, build, deploy]
+
+default:
+  tags: [courtside]
+  timeout: 10 minutes
+
+verify-database:
+  stage: verify
+  image:
+    name: docker.io/library/postgres@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994
+    entrypoint: [""]
+  environment:
+    name: test
+    action: verify
+  script:
+    - test -n "$TEST_DATABASE_URL"
+    - export PGDATABASE="$TEST_DATABASE_URL" PGCONNECT_TIMEOUT=5
+    - psql -v ON_ERROR_STOP=1 -Atc 'SELECT current_database(), current_user; BEGIN; CREATE TEMP TABLE infra_probe (value integer); INSERT INTO infra_probe VALUES (1); SELECT value FROM infra_probe; ROLLBACK;'
+
+build-smoke:
+  stage: build
+  image:
+    name: quay.io/podman/stable@sha256:7b5e95b4934dde2d367b949c47a68f3705ca21e077fb27ed9a5b4fb8b01b9008
+    docker:
+      user: "1000:1000"
+  variables:
+    STORAGE_DRIVER: vfs
+    BUILDAH_ISOLATION: chroot
+  script:
+    - podman --version
+    - test "$(id -u)" != 0
+    - test ! -S /run/podman/podman.sock
+    - test ! -S /var/run/docker.sock
+    - export REGISTRY_AUTH_FILE="$(mktemp)"
+    - printf '{}' > "$REGISTRY_AUTH_FILE"
+    - trap 'rm -f "$REGISTRY_AUTH_FILE"' EXIT
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | podman login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - podman build --isolation=chroot -t "$CI_REGISTRY_IMAGE/infra-smoke:$CI_COMMIT_SHA" infra/smoke
+    - podman push --digestfile /tmp/smoke-digest "$CI_REGISTRY_IMAGE/infra-smoke:$CI_COMMIT_SHA"
+    - printf 'SMOKE_IMAGE=%s/infra-smoke@%s\n' "$CI_REGISTRY_IMAGE" "$(cat /tmp/smoke-digest)" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+    expire_in: 1 day
+
+deploy-smoke:
+  stage: deploy
+  image: docker.io/library/alpine@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+  resource_group: courtside-demo
+  environment:
+    name: demo
+    action: verify
+  needs:
+    - job: build-smoke
+      artifacts: true
+  before_script:
+    - apk add --no-cache curl ca-certificates
+    - curl --fail --silent --show-error --location https://dl.k8s.io/release/v1.36.6/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
+    - curl --fail --silent --show-error --location https://dl.k8s.io/release/v1.36.6/bin/linux/amd64/kubectl.sha256 -o /tmp/kubectl.sha256
+    - printf '%s  /usr/local/bin/kubectl\n' "$(cat /tmp/kubectl.sha256)" | sha256sum -c -
+    - chmod 755 /usr/local/bin/kubectl
+    - export KUBECONFIG="$KUBE_CONFIG"
+  script:
+    - test -s "$KUBECONFIG"
+    - kubectl auth can-i create deployments -n courtside-demo
+    - if kubectl auth can-i get secrets -n courtside-demo; then exit 1; fi
+    - trap 'kubectl -n courtside-demo delete deployment courtside-infra-smoke --ignore-not-found --wait=false' EXIT
+    - kubectl set image --local -f infra/smoke/deployment.yaml "smoke=$SMOKE_IMAGE" -o yaml | kubectl apply -f -
+    - kubectl -n courtside-demo rollout status deployment/courtside-infra-smoke --timeout=180s
+    - kubectl -n courtside-demo logs deployment/courtside-infra-smoke
+    - kubectl -n courtside-demo delete deployment courtside-infra-smoke --wait=true
