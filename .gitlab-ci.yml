@@ -19,8 +19,8 @@ verify-database:
     action: verify
   script:
     - test -n "$TEST_DATABASE_URL"
-    - export PGDATABASE="$TEST_DATABASE_URL" PGCONNECT_TIMEOUT=5
-    - psql -v ON_ERROR_STOP=1 -Atc 'SELECT current_database(), current_user; BEGIN; CREATE TEMP TABLE infra_probe (value integer); INSERT INTO infra_probe VALUES (1); SELECT value FROM infra_probe; ROLLBACK;'
+    - export PGCONNECT_TIMEOUT=5
+    - psql --dbname="$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc 'SELECT current_database(), current_user; BEGIN; CREATE TEMP TABLE infra_probe (value integer); INSERT INTO infra_probe VALUES (1); SELECT value FROM infra_probe; ROLLBACK;'
 
 build-smoke:
   stage: build
