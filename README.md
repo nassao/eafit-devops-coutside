@@ -31,3 +31,5 @@ No host socket or permanent credential mount is exposed to pipeline containers.
 Kubernetes uses containerd; Podman runs PostgreSQL and the CI containers.
 The cluster and database endpoints are private and accessed through SSH tunnels
 from the instructor's Mac. Credentials and kubeconfigs must never be committed.
+
+See [the infrastructure setup and recovery guide](docs/infrastructure-setup.md) for the complete procedure and verified reference pipeline.
